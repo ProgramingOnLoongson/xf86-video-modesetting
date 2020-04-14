@@ -537,13 +537,12 @@ static void dispatch_slave_dirty(ScreenPtr pScreen)
 }
 #endif
 
-static void msBlockHandler(BLOCKHANDLER_ARGS_DECL)
+static void msBlockHandler(ScreenPtr pScreen, void *timeout)
 {
-    SCREEN_PTR(arg);
     modesettingPtr ms = modesettingPTR(xf86ScreenToScrn(pScreen));
 
     pScreen->BlockHandler = ms->BlockHandler;
-    pScreen->BlockHandler(BLOCKHANDLER_ARGS);
+    pScreen->BlockHandler(pScreen, timeout);
     pScreen->BlockHandler = msBlockHandler;
 #ifdef MODESETTING_OUTPUT_SLAVE_SUPPORT
     if (pScreen->isGPU)
@@ -1020,15 +1019,15 @@ ScreenInit(SCREEN_INIT_ARGS_DECL)
 #endif
 
     if (!xf86CrtcScreenInit(pScreen))
-	return FALSE;
+        return FALSE;
 
     if (!miCreateDefColormap(pScreen))
-	return FALSE;
+        return FALSE;
 
     xf86DPMSInit(pScreen, xf86DPMSSet, 0);
 
     if (serverGeneration == 1)
-	xf86ShowUnusedOptions(pScrn->scrnIndex, pScrn->options);
+        xf86ShowUnusedOptions(pScrn->scrnIndex, pScrn->options);
 
     return EnterVT(VT_FUNC_ARGS);
 }

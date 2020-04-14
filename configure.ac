@@ -22,7 +22,7 @@
 
 # Initialize Autoconf
 AC_PREREQ([2.60])
-AC_INIT([xf86-video-modesetting],
+AC_INIT([xf86-video-loongson],
         [0.9.0],
         [https://bugs.freedesktop.org/enter_bug.cgi?product=xorg],
         [xf86-video-modesetting])
@@ -60,7 +60,7 @@ XORG_DRIVER_CHECK_EXT(XF86DRI, xextproto x11)
 XORG_DRIVER_CHECK_EXT(DPMSExtension, xextproto)
 
 # Checks for pkg-config packages
-PKG_CHECK_MODULES(XORG, [xorg-server xproto fontsproto $REQUIRED_MODULES])
+PKG_CHECK_MODULES(XORG, [xorg-server xproto fontsproto libdrm $REQUIRED_MODULES])
 sdkdir=$(pkg-config --variable=sdkdir xorg-server)
 
 PKG_CHECK_MODULES(XEXT, [xextproto >= 7.0.99.1],
@@ -91,7 +91,7 @@ AC_CHECK_FUNCS([drmPrimeFDToHandle])
 CFLAGS=$SAVE_CFLAGS
 LIBS=$SAVE_LIBS
 
-DRIVER_NAME=modesetting
+DRIVER_NAME=loongson
 AC_SUBST([DRIVER_NAME])
 AC_SUBST([moduledir])
 

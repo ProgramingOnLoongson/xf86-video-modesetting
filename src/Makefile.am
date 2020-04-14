@@ -26,12 +26,12 @@
 
 AM_CFLAGS = $(XORG_CFLAGS) $(DRM_CFLAGS) $(UDEV_CFLAGS) $(CWARNFLAGS)
 
-modesetting_drv_la_LTLIBRARIES = modesetting_drv.la
-modesetting_drv_la_LDFLAGS = -module -avoid-version
-modesetting_drv_la_LIBADD = @UDEV_LIBS@ @DRM_LIBS@
-modesetting_drv_ladir = @moduledir@/drivers
+loongson_drv_la_LTLIBRARIES = loongson_drv.la
+loongson_drv_la_LDFLAGS = -module -avoid-version
+loongson_drv_la_LIBADD = @UDEV_LIBS@ @DRM_LIBS@
+loongson_drv_ladir = @moduledir@/drivers
 
-modesetting_drv_la_SOURCES = \
+loongson_drv_la_SOURCES = \
 	 compat-api.h \
 	 driver.c \
 	 driver.h \

@@ -70,6 +70,8 @@ core
 *.pdb
 *.tar.bz2
 *.tar.gz
+*.swp
+*tags
 #
 #		Add & Override patterns for xf86-video-modesetting
 #
