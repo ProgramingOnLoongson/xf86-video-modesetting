@@ -32,6 +32,8 @@
 #include "libudev.h"
 #endif
 
+#include "dumb_bo.h"
+
 /* the perfect storm */
 #if XF86_CRTC_VERSION >= 5 && defined(HAVE_DRMPRIMEFDTOHANDLE) && HAVE_SCREEN_SPECIFIC_PRIVATE_KEYS
 #define MODESETTING_OUTPUT_SLAVE_SUPPORT 1
@@ -41,13 +43,6 @@
 #define DamageUnregister(d, dd) DamageUnregister(dd)
 #endif
 
-struct dumb_bo {
-    uint32_t handle;
-    uint32_t size;
-    void *ptr;
-    int map_count;
-    uint32_t pitch;
-};
 
 typedef struct {
     int fd;

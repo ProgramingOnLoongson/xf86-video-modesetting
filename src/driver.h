@@ -79,3 +79,8 @@ typedef struct _modesettingRec
 } modesettingRec, *modesettingPtr;
 
 #define modesettingPTR(p) ((modesettingPtr)((p)->driverPrivate))
+
+int LS_OpenHW(const char *dev);
+void LS_HookUpScreen(ScrnInfoPtr scrn, Bool (*pFnProbe)(DriverPtr, int) );
+const OptionInfoRec *LS_AvailableOptions(int chipid, int busid);
+

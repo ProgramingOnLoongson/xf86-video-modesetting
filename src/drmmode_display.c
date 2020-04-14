@@ -56,112 +56,7 @@
 
 #include "driver.h"
 
-static struct dumb_bo *dumb_bo_create(int fd,
-			  const unsigned width, const unsigned height,
-			  const unsigned bpp)
-{
-	struct drm_mode_create_dumb arg;
-	struct dumb_bo *bo;
-	int ret;
 
-	bo = calloc(1, sizeof(*bo));
-	if (!bo)
-		return NULL;
-
-	memset(&arg, 0, sizeof(arg));
-	arg.width = width;
-	arg.height = height;
-	arg.bpp = bpp;
-	
-	ret = drmIoctl(fd, DRM_IOCTL_MODE_CREATE_DUMB, &arg);
-	if (ret)
-		goto err_free;
-
-	bo->handle = arg.handle;
-	bo->size = arg.size;
-	bo->pitch = arg.pitch;
-
-	return bo;
- err_free:
-	free(bo);
-	return NULL;
-}
-
-static int dumb_bo_map(int fd, struct dumb_bo *bo)
-{
-	struct drm_mode_map_dumb arg;
-	int ret;
-	void *map;
-
-	if (bo->ptr) {
-		bo->map_count++;
-		return 0;
-	}
-
-	memset(&arg, 0, sizeof(arg));
-	arg.handle = bo->handle;
-
-	ret = drmIoctl(fd, DRM_IOCTL_MODE_MAP_DUMB, &arg);
-	if (ret)
-		return ret;
-
-	map = mmap(0, bo->size, PROT_READ | PROT_WRITE, MAP_SHARED,
-		   fd, arg.offset);
-	if (map == MAP_FAILED)
-		return -errno;
-
-	bo->ptr = map;
-	return 0;
-}
-
-#if 0
-static int dumb_bo_unmap(int fd, struct dumb_bo *bo)
-{
-	bo->map_count--;
-	return 0;
-}
-#endif
-
-static int dumb_bo_destroy(int fd, struct dumb_bo *bo)
-{
-	struct drm_mode_destroy_dumb arg;
-	int ret;
-	
-	if (bo->ptr) {
-		munmap(bo->ptr, bo->size);
-		bo->ptr = NULL;
-	}
-
-	memset(&arg, 0, sizeof(arg));
-	arg.handle = bo->handle;
-	ret = drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &arg);
-	if (ret)
-		return -errno;
-
-	free(bo);
-	return 0;
-}
-
-#ifdef MODESETTING_OUTPUT_SLAVE_SUPPORT
-static struct dumb_bo *dumb_get_bo_from_handle(int fd, int handle, int pitch, int size)
-{
-  	struct dumb_bo *bo;
-	int ret;
-
-	bo = calloc(1, sizeof(*bo));
-	if (!bo)
-		return NULL;
-
-	ret = drmPrimeFDToHandle(fd, handle, &bo->handle);
-	if (ret) {
-		free(bo);
-		return NULL;
-	}
-	bo->pitch = pitch;
-	bo->size = size;
-	return bo;
-}
-#endif
 
 #ifdef MODESETTING_OUTPUT_SLAVE_SUPPORT
 Bool drmmode_SetSlaveBO(PixmapPtr ppix,
@@ -170,7 +65,7 @@ Bool drmmode_SetSlaveBO(PixmapPtr ppix,
 {
     	msPixmapPrivPtr ppriv = msGetPixmapPriv(drmmode, ppix);
 
-	ppriv->backing_bo = dumb_get_bo_from_handle(drmmode->fd, fd_handle, pitch, size);
+	ppriv->backing_bo = dumb_get_bo_from_fd(drmmode->fd, fd_handle, pitch, size);
 	if (!ppriv->backing_bo)
 		return FALSE;
 
@@ -179,10 +74,8 @@ Bool drmmode_SetSlaveBO(PixmapPtr ppix,
 }
 #endif
 
-static void
-drmmode_ConvertFromKMode(ScrnInfoPtr	scrn,
-		     drmModeModeInfo *kmode,
-		     DisplayModePtr	mode)
+static void drmmode_ConvertFromKMode(
+    ScrnInfoPtr scrn, drmModeModeInfo *kmode, DisplayModePtr mode)
 {
 	memset(mode, 0, sizeof(DisplayModeRec));
 	mode->status = MODE_OK;
@@ -211,10 +104,9 @@ drmmode_ConvertFromKMode(ScrnInfoPtr	scrn,
 	xf86SetModeCrtc (mode, scrn->adjustFlags);
 }
 
-static void
-drmmode_ConvertToKMode(ScrnInfoPtr	scrn,
-		     drmModeModeInfo *kmode,
-		     DisplayModePtr	mode)
+
+static void drmmode_ConvertToKMode(ScrnInfoPtr scrn,
+    drmModeModeInfo *kmode, DisplayModePtr mode)
 {
 	memset(kmode, 0, sizeof(*kmode));
 
@@ -235,23 +127,22 @@ drmmode_ConvertToKMode(ScrnInfoPtr	scrn,
 	if (mode->name)
 		strncpy(kmode->name, mode->name, DRM_DISPLAY_MODE_LEN);
 	kmode->name[DRM_DISPLAY_MODE_LEN-1] = 0;
-
 }
 
-static void
-drmmode_crtc_dpms(xf86CrtcPtr crtc, int mode)
-{
-#if 0
-	xf86CrtcConfigPtr   xf86_config = XF86_CRTC_CONFIG_PTR(crtc->scrn);
-//	drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
-//	drmmode_ptr drmmode = drmmode_crtc->drmmode;
 
-	/* bonghits in the randr 1.2 - uses dpms to disable crtc - bad buzz */
-	if (mode == DPMSModeOff) {
-//		drmModeSetCrtc(drmmode->fd, drmmode_crtc->mode_crtc->crtc_id,
-//			       0, 0, 0, NULL, 0, NULL);
-	}
-#endif
+static void drmmode_crtc_dpms(xf86CrtcPtr crtc, int mode)
+{
+/*
+    modesettingPtr ms = modesettingPTR(crtc->scrn);
+    drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
+
+    //  XXX Check if DPMS mode is already the right one 
+
+    drmmode_crtc->dpms_mode = mode;
+
+    if (ms->atomic_modeset && mode != DPMSModeOn && !ms->pending_modeset)
+        drmmode_crtc_disable(crtc);
+*/
 }
 
 #if 0

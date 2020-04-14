@@ -65,8 +65,7 @@
 static void AdjustFrame(ADJUST_FRAME_ARGS_DECL);
 static Bool CloseScreen(CLOSE_SCREEN_ARGS_DECL);
 static Bool EnterVT(VT_FUNC_ARGS_DECL);
-static void Identify(int flags);
-static const OptionInfoRec *AvailableOptions(int chipid, int busid);
+
 static ModeStatus ValidMode(SCRN_ARG_TYPE arg, DisplayModePtr mode, Bool verbose,
 			    int flags);
 static void FreeScreen(FREE_SCREEN_ARGS_DECL);
@@ -75,50 +74,6 @@ static Bool SwitchMode(SWITCH_MODE_ARGS_DECL);
 static Bool ScreenInit(SCREEN_INIT_ARGS_DECL);
 static Bool PreInit(ScrnInfoPtr pScrn, int flags);
 
-static Bool Probe(DriverPtr drv, int flags);
-static Bool ms_pci_probe(DriverPtr driver,
-			 int entity_num, struct pci_device *device,
-			 intptr_t match_data);
-static Bool ms_driver_func(ScrnInfoPtr scrn, xorgDriverFuncOp op,
-			   void *data);
-
-#ifdef XSERVER_LIBPCIACCESS
-static const struct pci_id_match ms_device_match[] = {
-    {
-	PCI_MATCH_ANY, PCI_MATCH_ANY, PCI_MATCH_ANY, PCI_MATCH_ANY,
-	0x00030000, 0x00ff0000, 0
-    },
-
-    { 0, 0, 0 },
-};
-#endif
-
-#ifdef XSERVER_PLATFORM_BUS
-static Bool ms_platform_probe(DriverPtr driver,
-                          int entity_num, int flags, struct xf86_platform_device *device,
-			  intptr_t match_data);
-#endif
-
-_X_EXPORT DriverRec modesetting = {
-    1,
-    "modesetting",
-    Identify,
-    Probe,
-    AvailableOptions,
-    NULL,
-    0,
-    ms_driver_func,
-    ms_device_match,
-    ms_pci_probe,
-#ifdef XSERVER_PLATFORM_BUS
-    ms_platform_probe,
-#endif
-};
-
-static SymTabRec Chipsets[] = {
-    {0, "kms" },
-    {-1, NULL}
-};
 
 typedef enum
 {
@@ -136,309 +91,59 @@ static const OptionInfoRec Options[] = {
 
 int modesettingEntityIndex = -1;
 
-static MODULESETUPPROTO(Setup);
 
-static XF86ModuleVersionInfo VersRec = {
-    "modesetting",
-    MODULEVENDORSTRING,
-    MODINFOSTRING1,
-    MODINFOSTRING2,
-    XORG_VERSION_CURRENT,
-    PACKAGE_VERSION_MAJOR, PACKAGE_VERSION_MINOR, PACKAGE_VERSION_PATCHLEVEL,
-    ABI_CLASS_VIDEODRV,
-    ABI_VIDEODRV_VERSION,
-    MOD_CLASS_VIDEODRV,
-    {0, 0, 0, 0}
-};
-
-_X_EXPORT XF86ModuleData modesettingModuleData = { &VersRec, Setup, NULL };
-
-static pointer
-Setup(pointer module, pointer opts, int *errmaj, int *errmin)
-{
-    static Bool setupDone = 0;
-
-    /* This module should be loaded only once, but check to be sure.
-     */
-    if (!setupDone) {
-	setupDone = 1;
-	xf86AddDriver(&modesetting, module, HaveDriverFuncs);
-
-	/*
-	 * The return value must be non-NULL on success even though there
-	 * is no TearDownProc.
-	 */
-	return (pointer) 1;
-    } else {
-	if (errmaj)
-	    *errmaj = LDR_ONCEONLY;
-	return NULL;
-    }
-}
-
-static void
-Identify(int flags)
-{
-    xf86PrintChipsets("modesetting", "Driver for Modesetting Kernel Drivers",
-		      Chipsets);
-}
-
-static int open_hw(const char *dev)
+int LS_OpenHW(const char *dev)
 {
     int fd;
-    if (dev)
-	fd = open(dev, O_RDWR, 0);
-    else {
-	dev = getenv("KMSDEVICE");
-	if ((NULL == dev) || ((fd = open(dev, O_RDWR, 0)) == -1)) {
-	    dev = "/dev/dri/card0";
-	    fd = open(dev,O_RDWR, 0);
-	}
+    if (dev) {
+        fd = open(dev, O_RDWR, 0);
     }
-    if (fd == -1)
-	xf86DrvMsg(-1, X_ERROR,"open %s: %s\n", dev, strerror(errno));
+    else
+    {
+        dev = getenv("KMSDEVICE");
+        if ((NULL == dev) || ((fd = open(dev, O_RDWR, 0)) == -1))
+        {
+            dev = "/dev/dri/card0";
+            fd = open(dev,O_RDWR, 0);
+        }
+    }
 
+    if (fd == -1) {
+        xf86DrvMsg(-1, X_ERROR,"open %s: %s\n", dev, strerror(errno));
+    }
     return fd;
 }
 
-static int check_outputs(int fd)
+
+void LS_HookUpScreen(ScrnInfoPtr scrn, Bool (*pFnProbe)(DriverPtr, int) )
 {
-    drmModeResPtr res = drmModeGetResources(fd);
-    int ret;
-
-    if (!res)
-        return FALSE;
-    ret = res->count_connectors > 0;
-    drmModeFreeResources(res);
-    return ret;
-}
-
-static Bool probe_hw(const char *dev, struct xf86_platform_device *platform_dev)
-{
-    int fd;
-
-#if XF86_PDEV_SERVER_FD
-    if (platform_dev && (platform_dev->flags & XF86_PDEV_SERVER_FD)) {
-        fd = xf86_get_platform_device_int_attrib(platform_dev, ODEV_ATTRIB_FD, -1);
-        if (fd == -1)
-            return FALSE;
-        return check_outputs(fd);
-    }
-#endif
-
-    fd = open_hw(dev);
-    if (fd != -1) {
-        int ret = check_outputs(fd);
-        close(fd);
-        return ret;
-    }
-    return FALSE;
-}
-
-static char *
-ms_DRICreatePCIBusID(const struct pci_device *dev)
-{
-    char *busID;
-
-    if (asprintf(&busID, "pci:%04x:%02x:%02x.%d",
-                 dev->domain, dev->bus, dev->dev, dev->func) == -1)
-        return NULL;
-
-    return busID;
+	scrn->driverVersion = 1;
+	scrn->driverName = "loongson";
+	scrn->name = "loongson";
+	scrn->Probe = pFnProbe;
+	scrn->PreInit = PreInit;
+	scrn->ScreenInit = ScreenInit;
+	scrn->SwitchMode = SwitchMode;
+	scrn->AdjustFrame = AdjustFrame;
+	scrn->EnterVT = EnterVT;
+	scrn->LeaveVT = LeaveVT;
+	scrn->FreeScreen = FreeScreen;
+	scrn->ValidMode = ValidMode;
 }
 
 
-static Bool probe_hw_pci(const char *dev, struct pci_device *pdev)
-{
-    int ret = FALSE, fd = open_hw(dev);
-    char *id, *devid;
-    drmSetVersion sv;
 
-    if (fd == -1)
-	return FALSE;
-
-    sv.drm_di_major = 1;
-    sv.drm_di_minor = 4;
-    sv.drm_dd_major = -1;
-    sv.drm_dd_minor = -1;
-    if (drmSetInterfaceVersion(fd, &sv)) {
-        close(fd);
-        return FALSE;
-    }
-
-
-    id = drmGetBusid(fd);
-    devid = ms_DRICreatePCIBusID(pdev);
-
-    if (id && devid && !strcmp(id, devid))
-        ret = check_outputs(fd);
-
-    close(fd);
-    free(id);
-    free(devid);
-    return ret;
-}
-static const OptionInfoRec *
-AvailableOptions(int chipid, int busid)
+const OptionInfoRec * LS_AvailableOptions(int chipid, int busid)
 {
     return Options;
 }
 
-static Bool
-ms_driver_func(ScrnInfoPtr scrn, xorgDriverFuncOp op, void *data)
-{
-    xorgHWFlags *flag;
-    
-    switch (op) {
-	case GET_REQUIRED_HW_INTERFACES:
-	    flag = (CARD32 *)data;
-	    (*flag) = 0;
-	    return TRUE;
-#if XORG_VERSION_CURRENT >= XORG_VERSION_NUMERIC(1,15,99,902,0)
-        case SUPPORTS_SERVER_FDS:
-            return TRUE;
-#endif
-	default:
-	    return FALSE;
-    }
-}
 
-#if XSERVER_LIBPCIACCESS
-static Bool
-ms_pci_probe(DriverPtr driver,
-	     int entity_num, struct pci_device *dev, intptr_t match_data)
-{
-    ScrnInfoPtr scrn = NULL;
 
-    scrn = xf86ConfigPciEntity(scrn, 0, entity_num, NULL,
-			       NULL, NULL, NULL, NULL, NULL);
-    if (scrn) {
-	const char *devpath;
-	GDevPtr devSection = xf86GetDevFromEntity(scrn->entityList[0],
-						  scrn->entityInstanceList[0]);
-
-	devpath = xf86FindOptionValue(devSection->options, "kmsdev");
-	if (probe_hw_pci(devpath, dev)) {
-	    scrn->driverVersion = 1;
-	    scrn->driverName = "modesetting";
-	    scrn->name = "modeset";
-	    scrn->Probe = NULL;
-	    scrn->PreInit = PreInit;
-	    scrn->ScreenInit = ScreenInit;
-	    scrn->SwitchMode = SwitchMode;
-	    scrn->AdjustFrame = AdjustFrame;
-	    scrn->EnterVT = EnterVT;
-	    scrn->LeaveVT = LeaveVT;
-	    scrn->FreeScreen = FreeScreen;
-	    scrn->ValidMode = ValidMode;
-
-	    xf86DrvMsg(scrn->scrnIndex, X_CONFIG,
-		       "claimed PCI slot %d@%d:%d:%d\n", 
-		       dev->bus, dev->domain, dev->dev, dev->func);
-	    xf86DrvMsg(scrn->scrnIndex, X_INFO,
-		       "using %s\n", devpath ? devpath : "default device");
-	} else
-	    scrn = NULL;
-    }
-    return scrn != NULL;
-}
-#endif
-
-#ifdef XSERVER_PLATFORM_BUS
-static Bool
-ms_platform_probe(DriverPtr driver,
-              int entity_num, int flags, struct xf86_platform_device *dev, intptr_t match_data)
-{
-    ScrnInfoPtr scrn = NULL;
-    const char *path = xf86_get_platform_device_attrib(dev, ODEV_ATTRIB_PATH);
-    int scr_flags = 0;
-
-    if (flags & PLATFORM_PROBE_GPU_SCREEN)
-            scr_flags = XF86_ALLOCATE_GPU_SCREEN;
-
-    if (probe_hw(path, dev)) {
-        scrn = xf86AllocateScreen(driver, scr_flags);
-        xf86AddEntityToScreen(scrn, entity_num);
-
-        scrn->driverName = "modesetting";
-        scrn->name = "modesetting";
-        scrn->PreInit = PreInit;
-        scrn->ScreenInit = ScreenInit;
-        scrn->SwitchMode = SwitchMode;
-        scrn->AdjustFrame = AdjustFrame;
-        scrn->EnterVT = EnterVT;
-        scrn->LeaveVT = LeaveVT;
-        scrn->FreeScreen = FreeScreen;
-        scrn->ValidMode = ValidMode;
-        xf86DrvMsg(scrn->scrnIndex, X_INFO,
-                   "using drv %s\n", path ? path : "default device");
-    }
-
-    return scrn != NULL;
-}
-#endif
-
-static Bool
-Probe(DriverPtr drv, int flags)
-{
-    int i, numDevSections;
-    GDevPtr *devSections;
-    Bool foundScreen = FALSE;
-    const char *dev;
-    ScrnInfoPtr scrn = NULL;
-
-    /* For now, just bail out for PROBE_DETECT. */
-    if (flags & PROBE_DETECT)
-	return FALSE;
-
-    /*
-     * Find the config file Device sections that match this
-     * driver, and return if there are none.
-     */
-    if ((numDevSections = xf86MatchDevice("modesetting", &devSections)) <= 0) {
-	return FALSE;
-    }
-
-    for (i = 0; i < numDevSections; i++) {
-
-	dev = xf86FindOptionValue(devSections[i]->options,"kmsdev");
-	if (probe_hw(dev, NULL)) {
-	    int entity;
-	    entity = xf86ClaimFbSlot(drv, 0, devSections[i], TRUE);
-	    scrn = xf86ConfigFbEntity(scrn, 0, entity,
-				  NULL, NULL, NULL, NULL);
-	}
-
-	if (scrn) {
-	    foundScreen = TRUE;
-	    scrn->driverVersion = 1;
-	    scrn->driverName = "modesetting";
-	    scrn->name = "modesetting";
-	    scrn->Probe = Probe;
-	    scrn->PreInit = PreInit;
-	    scrn->ScreenInit = ScreenInit;
-	    scrn->SwitchMode = SwitchMode;
-	    scrn->AdjustFrame = AdjustFrame;
-	    scrn->EnterVT = EnterVT;
-	    scrn->LeaveVT = LeaveVT;
-	    scrn->FreeScreen = FreeScreen;
-	    scrn->ValidMode = ValidMode;
-
-	    xf86DrvMsg(scrn->scrnIndex, X_INFO,
-			   "using %s\n", dev ? dev : "default device");
-	}
-    }
-
-    free(devSections);
-
-    return foundScreen;
-}
-
-static Bool
-GetRec(ScrnInfoPtr pScrn)
+static Bool GetRec(ScrnInfoPtr pScrn)
 {
     if (pScrn->driverPrivate)
-	return TRUE;
+        return TRUE;
 
     pScrn->driverPrivate = xnfcalloc(sizeof(modesettingRec), 1);
 
@@ -446,38 +151,38 @@ GetRec(ScrnInfoPtr pScrn)
 }
 
 static int dispatch_dirty_region(ScrnInfoPtr scrn,
-				 PixmapPtr pixmap,
-				 DamagePtr damage,
-				 int fb_id)
+        PixmapPtr pixmap, DamagePtr damage, int fb_id)
 {
     modesettingPtr ms = modesettingPTR(scrn);
     RegionPtr dirty = DamageRegion(damage);
     unsigned num_cliprects = REGION_NUM_RECTS(dirty);
 
-    if (num_cliprects) {
-	drmModeClip *clip = malloc(num_cliprects * sizeof(drmModeClip));
-	BoxPtr rect = REGION_RECTS(dirty);
-	int i, ret;
-	    
-	if (!clip)
-	    return -ENOMEM;
+    if (num_cliprects)
+    {
+        drmModeClip *clip = malloc(num_cliprects * sizeof(drmModeClip));
+        BoxPtr rect = REGION_RECTS(dirty);
+        int i, ret;
 
-	/* XXX no need for copy? */
-	for (i = 0; i < num_cliprects; i++, rect++) {
-	    clip[i].x1 = rect->x1;
-	    clip[i].y1 = rect->y1;
-	    clip[i].x2 = rect->x2;
-	    clip[i].y2 = rect->y2;
-	}
+        if (!clip)
+            return -ENOMEM;
 
-	/* TODO query connector property to see if this is needed */
-	ret = drmModeDirtyFB(ms->fd, fb_id, clip, num_cliprects);
-	free(clip);
-	DamageEmpty(damage);
-	if (ret) {
-	    if (ret == -EINVAL)
-		return ret;
-	}
+        /* XXX no need for copy? */
+        for (i = 0; i < num_cliprects; i++, rect++)
+        {
+            clip[i].x1 = rect->x1;
+            clip[i].y1 = rect->y1;
+            clip[i].x2 = rect->x2;
+            clip[i].y2 = rect->y2;
+        }
+
+        /* TODO query connector property to see if this is needed */
+        ret = drmModeDirtyFB(ms->fd, fb_id, clip, num_cliprects);
+        free(clip);
+        DamageEmpty(damage);
+        if (ret) {
+            if (ret == -EINVAL)
+                return ret;
+        }
     }
     return 0;
 }
@@ -491,13 +196,15 @@ static void dispatch_dirty(ScreenPtr pScreen)
     int ret;
 
     ret = dispatch_dirty_region(scrn, pixmap, ms->damage, fb_id);
-    if (ret == -EINVAL || ret == -ENOSYS) {
-	ms->dirty_enabled = FALSE;
-	DamageUnregister(&pScreen->GetScreenPixmap(pScreen)->drawable, ms->damage);
-	DamageDestroy(ms->damage);
-	ms->damage = NULL;
-	xf86DrvMsg(scrn->scrnIndex, X_INFO, "Disabling kernel dirty updates, not required.\n");
-	return;
+    if (ret == -EINVAL || ret == -ENOSYS)
+    {
+        ms->dirty_enabled = FALSE;
+        DamageUnregister(&pScreen->GetScreenPixmap(pScreen)->drawable, ms->damage);
+        DamageDestroy(ms->damage);
+        ms->damage = NULL;
+        xf86DrvMsg(scrn->scrnIndex, X_INFO,
+            "Disabling kernel dirty updates, not required.\n");
+        return;
     }
 }
 
@@ -524,15 +231,16 @@ static void dispatch_slave_dirty(ScreenPtr pScreen)
     xf86CrtcConfigPtr xf86_config = XF86_CRTC_CONFIG_PTR(scrn);
     int c;
 
-    for (c = 0; c < xf86_config->num_crtc; c++) {
-	xf86CrtcPtr crtc = xf86_config->crtc[c];
+    for (c = 0; c < xf86_config->num_crtc; c++)
+    {
+        xf86CrtcPtr crtc = xf86_config->crtc[c];
 
-	if (!crtc->randr_crtc)
-	    continue;
-	if (!crtc->randr_crtc->scanout_pixmap)
-	    continue;
+        if (!crtc->randr_crtc)
+            continue;
+        if (!crtc->randr_crtc->scanout_pixmap)
+            continue;
 
-	dispatch_dirty_crtc(scrn, crtc);
+        dispatch_dirty_crtc(scrn, crtc);
     }
 }
 #endif
@@ -553,8 +261,8 @@ static void msBlockHandler(ScreenPtr pScreen, void *timeout)
         dispatch_dirty(pScreen);
 }
 
-static void
-FreeRec(ScrnInfoPtr pScrn)
+
+static void FreeRec(ScrnInfoPtr pScrn)
 {
     modesettingPtr ms;
 
@@ -592,8 +300,7 @@ FreeRec(ScrnInfoPtr pScrn)
 #define DRM_CAP_CURSOR_HEIGHT 0x9
 #endif
 
-static Bool
-PreInit(ScrnInfoPtr pScrn, int flags)
+static Bool PreInit(ScrnInfoPtr pScrn, int flags)
 {
     modesettingPtr ms;
     rgb defaultWeight = { 0, 0, 0 };
@@ -608,38 +315,47 @@ PreInit(ScrnInfoPtr pScrn, int flags)
     int defaultdepth, defaultbpp;
 
     if (pScrn->numEntities != 1)
-	return FALSE;
-
+    {
+        return FALSE;
+    }
     pEnt = xf86GetEntityInfo(pScrn->entityList[0]);
 
-    if (flags & PROBE_DETECT) {
-	return FALSE;
+    if (flags & PROBE_DETECT)
+    {
+        return FALSE;
     }
 
     /* Allocate driverPrivate */
     if (!GetRec(pScrn))
-	return FALSE;
+    {
+        return FALSE;
+    }
 
     ms = modesettingPTR(pScrn);
     ms->SaveGeneration = -1;
     ms->pEnt = pEnt;
 
-    pScrn->displayWidth = 640;	       /* default it */
+    pScrn->displayWidth = 640;       /* default it */
 
     /* Allocate an entity private if necessary */
-    if (xf86IsEntityShared(pScrn->entityList[0])) {
-	msEnt = xf86GetEntityPrivate(pScrn->entityList[0],
-				     modesettingEntityIndex)->ptr;
-	ms->entityPrivate = msEnt;
-    } else
-	ms->entityPrivate = NULL;
+    if (xf86IsEntityShared(pScrn->entityList[0]))
+    {
+        msEnt = xf86GetEntityPrivate(pScrn->entityList[0],
+                modesettingEntityIndex)->ptr;
+        ms->entityPrivate = msEnt;
+    } 
+    else
+    {
+        ms->entityPrivate = NULL;
+    }
 
-    if (xf86IsEntityShared(pScrn->entityList[0])) {
-	if (xf86IsPrimInitDone(pScrn->entityList[0])) {
-	    /* do something */
-	} else {
-	    xf86SetPrimInitDone(pScrn->entityList[0]);
-	}
+    if (xf86IsEntityShared(pScrn->entityList[0]))
+    {
+        if (xf86IsPrimInitDone(pScrn->entityList[0])) {
+            /* do something */
+        } else {
+            xf86SetPrimInitDone(pScrn->entityList[0]);
+        }
     }
 
     pScrn->monitor = pScrn->confScreen->monitor;
@@ -647,7 +363,8 @@ PreInit(ScrnInfoPtr pScrn, int flags)
     pScrn->rgbBits = 8;
 
 #if XSERVER_PLATFORM_BUS
-    if (pEnt->location.type == BUS_PLATFORM) {
+    if (pEnt->location.type == BUS_PLATFORM)
+    {
 #ifdef XF86_PDEV_SERVER_FD
         if (pEnt->location.id.plat->flags & XF86_PDEV_SERVER_FD)
             ms->fd = xf86_get_platform_device_int_attrib(pEnt->location.id.plat, ODEV_ATTRIB_FD, -1);
@@ -655,12 +372,13 @@ PreInit(ScrnInfoPtr pScrn, int flags)
 #endif
         {
             char *path = xf86_get_platform_device_attrib(pEnt->location.id.plat, ODEV_ATTRIB_PATH);
-            ms->fd = open_hw(path);
+            ms->fd = LS_OpenHW(path);
         }
     }
     else 
 #endif
-    if (pEnt->location.type == BUS_PCI) {
+    if (pEnt->location.type == BUS_PCI)
+    {
         ms->PciInfo = xf86GetPciInfoForEntity(ms->pEnt->index);
         if (ms->PciInfo) {
             BusID = malloc(64);
@@ -676,12 +394,16 @@ PreInit(ScrnInfoPtr pScrn, int flags)
                 );
         }
         ms->fd = drmOpen(NULL, BusID);
-    } else {
-        devicename = xf86FindOptionValue(ms->pEnt->device->options, "kmsdev");
-        ms->fd = open_hw(devicename);
     }
+    else {
+        devicename = xf86FindOptionValue(ms->pEnt->device->options, "kmsdev");
+        ms->fd = LS_OpenHW(devicename);
+    }
+
     if (ms->fd < 0)
-	return FALSE;
+    {
+        return FALSE;
+    }
 
     ms->drmmode.fd = ms->fd;
 
@@ -701,77 +423,79 @@ PreInit(ScrnInfoPtr pScrn, int flags)
     else
 	    bppflags = PreferConvert24to32 | SupportConvert24to32 | Support32bppFb;
     
-    if (!xf86SetDepthBpp
-	(pScrn, defaultdepth, defaultdepth, defaultbpp, bppflags))
-	return FALSE;
+    if (!xf86SetDepthBpp(pScrn, defaultdepth, defaultdepth, defaultbpp, bppflags))
+    {
+        return FALSE;
+    }
 
-    switch (pScrn->depth) {
-    case 15:
-    case 16:
-    case 24:
-	break;
-    default:
-	xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-		   "Given depth (%d) is not supported by the driver\n",
-		   pScrn->depth);
-	return FALSE;
+    switch (pScrn->depth)
+    {
+        case 15:
+        case 16:
+        case 24:
+        break;
+
+        default:
+        xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+           "Given depth (%d) is not supported by the driver\n", pScrn->depth);
+        return FALSE;
     }
     xf86PrintDepthBpp(pScrn);
 
     /* Process the options */
     xf86CollectOptions(pScrn, NULL);
     if (!(ms->Options = malloc(sizeof(Options))))
-	return FALSE;
+        return FALSE;
     memcpy(ms->Options, Options, sizeof(Options));
     xf86ProcessOptions(pScrn->scrnIndex, pScrn->options, ms->Options);
 
     if (!xf86SetWeight(pScrn, defaultWeight, defaultWeight))
-	return FALSE;
+        return FALSE;
     if (!xf86SetDefaultVisual(pScrn, -1))
-	return FALSE;
+        return FALSE;
 
     if (xf86ReturnOptValBool(ms->Options, OPTION_SW_CURSOR, FALSE)) {
-	ms->drmmode.sw_cursor = TRUE;
+        ms->drmmode.sw_cursor = TRUE;
     }
 
     ret = drmGetCap(ms->fd, DRM_CAP_DUMB_PREFER_SHADOW, &value);
     if (!ret) {
-	prefer_shadow = !!value;
+        prefer_shadow = !!value;
     }
 
     ms->cursor_width = 64;
     ms->cursor_height = 64;
     ret = drmGetCap(ms->fd, DRM_CAP_CURSOR_WIDTH, &value);
     if (!ret) {
-	ms->cursor_width = value;
+        ms->cursor_width = value;
     }
     ret = drmGetCap(ms->fd, DRM_CAP_CURSOR_HEIGHT, &value);
     if (!ret) {
-	ms->cursor_height = value;
+        ms->cursor_height = value;
     }
 
     ms->drmmode.shadow_enable = xf86ReturnOptValBool(ms->Options, OPTION_SHADOW_FB, prefer_shadow);
 
     xf86DrvMsg(pScrn->scrnIndex, X_INFO, "ShadowFB: preferred %s, enabled %s\n", prefer_shadow ? "YES" : "NO", ms->drmmode.shadow_enable ? "YES" : "NO");
     if (drmmode_pre_init(pScrn, &ms->drmmode, pScrn->bitsPerPixel / 8) == FALSE) {
-	xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "KMS setup failed\n");
-	goto fail;
+        xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "KMS setup failed\n");
+        goto fail;
     }
 
     /*
      * If the driver can do gamma correction, it should call xf86SetGamma() here.
      */
     {
-	Gamma zeros = { 0.0, 0.0, 0.0 };
+        Gamma zeros = { 0.0, 0.0, 0.0 };
 
-	if (!xf86SetGamma(pScrn, zeros)) {
-	    return FALSE;
-	}
+        if (!xf86SetGamma(pScrn, zeros)) {
+            return FALSE;
+        }
     }
 
     if (pScrn->modes == NULL) {
-	xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "No modes.\n");
-	return FALSE;
+        xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "No modes.\n");
+        return FALSE;
     }
 
     pScrn->currentMode = pScrn->modes;
@@ -781,13 +505,13 @@ PreInit(ScrnInfoPtr pScrn, int flags)
 
     /* Load the required sub modules */
     if (!xf86LoadSubModule(pScrn, "fb")) {
-	return FALSE;
+        return FALSE;
     }
 
     if (ms->drmmode.shadow_enable) {
-	if (!xf86LoadSubModule(pScrn, "shadow")) {
-	    return FALSE;
-	}
+        if (!xf86LoadSubModule(pScrn, "shadow")) {
+            return FALSE;
+        }
     }
 
     return TRUE;
@@ -795,9 +519,8 @@ PreInit(ScrnInfoPtr pScrn, int flags)
     return FALSE;
 }
 
-static void *
-msShadowWindow(ScreenPtr screen, CARD32 row, CARD32 offset, int mode,
-	       CARD32 *size, void *closure)
+static void * msShadowWindow(ScreenPtr screen, CARD32 row, CARD32 offset, int mode,
+       CARD32 *size, void *closure)
 {
     ScrnInfoPtr pScrn = xf86ScreenToScrn(screen);
     modesettingPtr ms = modesettingPTR(pScrn);
@@ -809,14 +532,13 @@ msShadowWindow(ScreenPtr screen, CARD32 row, CARD32 offset, int mode,
     return ((uint8_t *)ms->drmmode.front_bo->ptr + row * stride + offset);
 }
 
-static void
-msUpdatePacked(ScreenPtr pScreen, shadowBufPtr pBuf)
+static void msUpdatePacked(ScreenPtr pScreen, shadowBufPtr pBuf)
 {
     shadowUpdatePacked(pScreen, pBuf);
 }
 
-static Bool
-CreateScreenResources(ScreenPtr pScreen)
+
+static Bool CreateScreenResources(ScreenPtr pScreen)
 {
     ScrnInfoPtr pScrn = xf86ScreenToScrn(pScreen);
     modesettingPtr ms = modesettingPTR(pScrn);
@@ -836,20 +558,20 @@ CreateScreenResources(ScreenPtr pScreen)
         drmmode_map_cursor_bos(pScrn, &ms->drmmode);
     pixels = drmmode_map_front_bo(&ms->drmmode);
     if (!pixels)
-	return FALSE;
+        return FALSE;
 
     rootPixmap = pScreen->GetScreenPixmap(pScreen);
 
     if (ms->drmmode.shadow_enable)
-	pixels = ms->drmmode.shadow_fb;
+        pixels = ms->drmmode.shadow_fb;
     
     if (!pScreen->ModifyPixmapHeader(rootPixmap, -1, -1, -1, -1, -1, pixels))
-	FatalError("Couldn't adjust screen pixmap\n");
+        FatalError("Couldn't adjust screen pixmap\n");
 
     if (ms->drmmode.shadow_enable) {
-	if (!shadowAdd(pScreen, rootPixmap, msUpdatePacked,
-		       msShadowWindow, 0, 0))
-	    return FALSE;
+        if (!shadowAdd(pScreen, rootPixmap, msUpdatePacked,
+           msShadowWindow, 0, 0))
+        return FALSE;
     }
 
     ms->damage = DamageCreate(NULL, NULL, DamageReportNone, TRUE,
@@ -877,8 +599,7 @@ msShadowInit(ScreenPtr pScreen)
 }
 
 #ifdef MODESETTING_OUTPUT_SLAVE_SUPPORT
-static Bool
-msSetSharedPixmapBacking(PixmapPtr ppix, void *fd_handle)
+static Bool msSetSharedPixmapBacking(PixmapPtr ppix, void *fd_handle)
 {
     ScreenPtr screen = ppix->drawable.pScreen;
     ScrnInfoPtr scrn = xf86ScreenToScrn(screen);
@@ -889,7 +610,9 @@ msSetSharedPixmapBacking(PixmapPtr ppix, void *fd_handle)
 
     ret = drmmode_SetSlaveBO(ppix, &ms->drmmode, ihandle, ppix->devKind, size);
     if (ret == FALSE)
-	    return ret;
+    {
+       return ret;
+    }
 
     return TRUE;
 }
