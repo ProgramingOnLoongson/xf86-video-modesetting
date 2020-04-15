@@ -23,9 +23,9 @@
 # Initialize Autoconf
 AC_PREREQ([2.60])
 AC_INIT([xf86-video-loongson],
-        [0.9.0],
+        [1.0.0],
         [https://bugs.freedesktop.org/enter_bug.cgi?product=xorg],
-        [xf86-video-modesetting])
+        [xf86-video-loongson])
 AC_CONFIG_SRCDIR([Makefile.am])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])

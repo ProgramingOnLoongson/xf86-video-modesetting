@@ -57,8 +57,7 @@ struct ms_present_vblank_event {
 static RRCrtcPtr
 ms_present_get_crtc(WindowPtr window)
 {
-    xf86CrtcPtr xf86_crtc = ms_dri2_crtc_covering_drawable(&window->drawable);
-    return xf86_crtc ? xf86_crtc->randr_crtc : NULL;
+    return ms_randr_crtc_covering_drawable(&window->drawable);
 }
 
 static int
@@ -165,7 +164,7 @@ ms_present_flush(WindowPtr window)
     modesettingPtr ms = modesettingPTR(scrn);
 
     if (ms->drmmode.glamor)
-        glamor_block_handler(screen);
+        ms->glamor.block_handler(screen);
 #endif
 }
 
@@ -207,13 +206,17 @@ ms_present_flip_abort(modesettingPtr ms, void *data)
 
 /*
  * Test to see if page flipping is possible on the target crtc
+ *
+ * We ignore sw-cursors when *disabling* flipping, we may very well be
+ * returning to scanning out the normal framebuffer *because* we just
+ * switched to sw-cursor mode and check_flip just failed because of that.
  */
 static Bool
-ms_present_check_flip(RRCrtcPtr crtc,
-                      WindowPtr window,
-                      PixmapPtr pixmap,
-                      Bool sync_flip,
-                      PresentFlipReason *reason)
+ms_present_check_unflip(RRCrtcPtr crtc,
+                        WindowPtr window,
+                        PixmapPtr pixmap,
+                        Bool sync_flip,
+                        PresentFlipReason *reason)
 {
     ScreenPtr screen = window->drawable.pScreen;
     ScrnInfoPtr scrn = xf86ScreenToScrn(screen);
@@ -254,7 +257,7 @@ ms_present_check_flip(RRCrtcPtr crtc,
 
 #ifdef GBM_BO_WITH_MODIFIERS
     /* Check if buffer format/modifier is supported by all active CRTCs */
-    gbm = glamor_gbm_bo_from_pixmap(screen, pixmap);
+    gbm = ms->glamor.gbm_bo_from_pixmap(screen, pixmap);
     if (gbm) {
         uint32_t format;
         uint64_t modifier;
@@ -278,6 +281,23 @@ ms_present_check_flip(RRCrtcPtr crtc,
      */
 
     return TRUE;
+}
+
+static Bool
+ms_present_check_flip(RRCrtcPtr crtc,
+                      WindowPtr window,
+                      PixmapPtr pixmap,
+                      Bool sync_flip,
+                      PresentFlipReason *reason)
+{
+    ScreenPtr screen = window->drawable.pScreen;
+    ScrnInfoPtr scrn = xf86ScreenToScrn(screen);
+    modesettingPtr ms = modesettingPTR(scrn);
+
+    if (ms->drmmode.sprites_visible > 0)
+        return FALSE;
+
+    return ms_present_check_unflip(crtc, window, pixmap, sync_flip, reason);
 }
 
 /*
@@ -313,10 +333,9 @@ ms_present_flip(RRCrtcPtr crtc,
     event->unflip = FALSE;
 
     ret = ms_do_pageflip(screen, pixmap, event, drmmode_crtc->vblank_pipe, !sync_flip,
-                         ms_present_flip_handler, ms_present_flip_abort);
-    if (!ret)
-        xf86DrvMsg(scrn->scrnIndex, X_ERROR, "present flip failed\n");
-    else
+                         ms_present_flip_handler, ms_present_flip_abort,
+                         "Present-flip");
+    if (ret)
         ms->drmmode.present_flipping = TRUE;
 
     return ret;
@@ -342,9 +361,10 @@ ms_present_unflip(ScreenPtr screen, uint64_t event_id)
     event->event_id = event_id;
     event->unflip = TRUE;
 
-    if (ms_present_check_flip(NULL, screen->root, pixmap, TRUE, NULL) &&
+    if (ms_present_check_unflip(NULL, screen->root, pixmap, TRUE, NULL) &&
         ms_do_pageflip(screen, pixmap, event, -1, FALSE,
-                       ms_present_flip_handler, ms_present_flip_abort)) {
+                       ms_present_flip_handler, ms_present_flip_abort,
+                       "Present-unflip")) {
         return;
     }
 
@@ -369,10 +389,10 @@ ms_present_unflip(ScreenPtr screen, uint64_t event_id)
 					crtc->x, crtc->y);
 	else
 	    drmmode_crtc->need_modeset = TRUE;
-    }
+	}
 
-    present_event_notify(event_id, 0, 0);
-    ms->drmmode.present_flipping = FALSE;
+	present_event_notify(event_id, 0, 0);
+	ms->drmmode.present_flipping = FALSE;
 }
 #endif
 
