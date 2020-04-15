@@ -26,23 +26,13 @@
 
 AM_CFLAGS = $(DIX_CFLAGS) $(XORG_CFLAGS) $(LIBDRM_CFLAGS) $(UDEV_CFLAGS) $(CWARNFLAGS)
 
-AM_CPPFLAGS = \
-	$(XORG_INCS) \
-	-I$(top_srcdir)/glamor \
-	-I$(srcdir)/../../ddc \
-	-I$(srcdir)/../../dri2 \
-	-I$(srcdir)/../../i2c \
-	-I$(srcdir)/../../modes \
-	-I$(srcdir)/../../parser \
-	-I$(srcdir)/../../ramdac \
-	$(NULL)
 
-modesetting_drv_la_LTLIBRARIES = modesetting_drv.la
-modesetting_drv_la_LDFLAGS = -module -avoid-version
-modesetting_drv_la_LIBADD = $(UDEV_LIBS) $(DRM_LIBS)
-modesetting_drv_ladir = @moduledir@/drivers
+loongson_drv_la_LTLIBRARIES = loongson_drv.la
+loongson_drv_la_LDFLAGS = -module -avoid-version
+loongson_drv_la_LIBADD = @UDEV_LIBS@ @DRM_LIBS@
+loongson_drv_ladir = @moduledir@/drivers
 
-modesetting_drv_la_SOURCES = \
+loongson_drv_la_SOURCES = \
 	 dri2.c \
 	 driver.c \
 	 driver.h \
@@ -54,17 +44,3 @@ modesetting_drv_la_SOURCES = \
 	 vblank.c \
 	 pageflip.c \
 	 $(NULL)
-
-drivermandir = $(DRIVER_MAN_DIR)
-driverman_PRE = modesetting.man
-driverman_DATA = $(driverman_PRE:man=@DRIVER_MAN_SUFFIX@)
-
-EXTRA_DIST = modesetting.man
-
-CLEANFILES = $(driverman_DATA)
-
-# String replacements in MAN_SUBSTS now come from xorg-macros.m4 via configure
-SUFFIXES = .$(DRIVER_MAN_SUFFIX) .man
-
-.man.$(DRIVER_MAN_SUFFIX):
-	$(AM_V_GEN)$(SED) $(MAN_SUBSTS) < $< > $@

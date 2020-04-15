@@ -27,6 +27,9 @@
  *
  */
 
+#include "config.h"
+
+
 #include <errno.h>
 #include <drm.h>
 #include <xf86drm.h>

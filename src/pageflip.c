@@ -20,11 +20,10 @@
  * OF THIS SOFTWARE.
  */
 
-#ifdef HAVE_DIX_CONFIG_H
-#include "dix-config.h"
-#endif
+#include "config.h"
 
-#include <xserver_poll.h>
+#include <sys/poll.h>
+
 #include <xf86drm.h>
 
 #include "driver.h"
@@ -35,8 +34,7 @@
  * Returns a negative value on error, 0 if there was nothing to process,
  * or 1 if we handled any events.
  */
-int
-ms_flush_drm_events(ScreenPtr screen)
+int ms_flush_drm_events(ScreenPtr screen)
 {
     ScrnInfoPtr scrn = xf86ScreenToScrn(screen);
     modesettingPtr ms = modesettingPTR(scrn);
@@ -45,7 +43,7 @@ ms_flush_drm_events(ScreenPtr screen)
     int r;
 
     do {
-            r = xserver_poll(&p, 1, 0);
+            r = poll(&p, 1, 0);
     } while (r == -1 && (errno == EINTR || errno == EAGAIN));
 
     /* If there was an error, r will be < 0.  Return that.  If there was

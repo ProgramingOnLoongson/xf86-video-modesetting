@@ -29,13 +29,10 @@
  *
  */
 
-#ifdef HAVE_DIX_CONFIG_H
-#include "dix-config.h"
-#endif
-
 #include <unistd.h>
 #include <fcntl.h>
-#include "xf86.h"
+#include "config.h"
+
 #include "xf86Priv.h"
 #include "xf86_OSproc.h"
 #include "compiler.h"
@@ -52,7 +49,7 @@
 #include "shadow.h"
 #include "xf86xv.h"
 #include <X11/extensions/Xv.h>
-#include <xorg-config.h>
+
 #ifdef XSERVER_PLATFORM_BUS
 #include "xf86platformBus.h"
 #endif
@@ -1002,8 +999,8 @@ PreInit(ScrnInfoPtr pScrn, int flags)
         return FALSE;
 
     if (!xf86GetOptValBool(ms->drmmode.Options, OPTION_SW_CURSOR,
-               &ms->drmmode.sw_cursor))
-    ms->drmmode.sw_cursor = msDefaultSoftwareCursor(ms);
+			   &ms->drmmode.sw_cursor))
+	ms->drmmode.sw_cursor = msDefaultSoftwareCursor(ms);
 
     ms->cursor_width = 64;
     ms->cursor_height = 64;
@@ -1076,7 +1073,7 @@ PreInit(ScrnInfoPtr pScrn, int flags)
 
 
     xf86DrvMsg(pScrn->scrnIndex, X_INFO, ms->kms_has_modifiers ? 
-	"KMS has modifier support.\n" : "KMS does't have modifier support\n");
+        "KMS has modifier support.\n" : "KMS does't have modifier support\n");
 
     if (drmmode_pre_init(pScrn, &ms->drmmode, pScrn->bitsPerPixel / 8) == FALSE) {
         xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "KMS setup failed\n");
