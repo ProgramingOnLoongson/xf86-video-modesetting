@@ -26,7 +26,7 @@
  */
 
 #include "config.h"
-
+#include <malloc.h>
 #include <errno.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
@@ -57,22 +57,23 @@ static PixmapPtr drmmode_create_pixmap_header(ScreenPtr pScreen, int width, int 
                                               int depth, int bitsPerPixel, int devKind,
                                               void *pPixData);
 
-static inline uint32_t *
-formats_ptr(struct drm_format_modifier_blob *blob)
+
+static inline uint32_t * formats_ptr(struct drm_format_modifier_blob *blob)
 {
     return (uint32_t *)(((char *)blob) + blob->formats_offset);
 }
 
-static inline struct drm_format_modifier *
+
+static inline struct drm_format_modifier * 
 modifiers_ptr(struct drm_format_modifier_blob *blob)
 {
     return (struct drm_format_modifier *)(((char *)blob) + blob->modifiers_offset);
 }
 
-static uint32_t
-get_opaque_format(uint32_t format)
+static uint32_t get_opaque_format(uint32_t format)
 {
-    switch (format) {
+    switch (format)
+    {
     case DRM_FORMAT_ARGB8888:
         return DRM_FORMAT_XRGB8888;
     case DRM_FORMAT_ARGB2101010:
@@ -82,8 +83,7 @@ get_opaque_format(uint32_t format)
     }
 }
 
-Bool
-drmmode_is_format_supported(ScrnInfoPtr scrn, uint32_t format, uint64_t modifier)
+Bool drmmode_is_format_supported(ScrnInfoPtr scrn, uint32_t format, uint64_t modifier)
 {
     xf86CrtcConfigPtr xf86_config = XF86_CRTC_CONFIG_PTR(scrn);
     int c, i, j;
@@ -999,8 +999,8 @@ drmmode_bo_import(drmmode_ptr drmmode, drmmode_bo *bo,
                         drmmode_bo_get_handle(bo), fb_id);
 }
 
-static Bool
-drmmode_create_bo(drmmode_ptr drmmode, drmmode_bo *bo,
+
+static Bool drmmode_create_bo( drmmode_ptr drmmode, drmmode_bo *bo,
                   unsigned width, unsigned height, unsigned bpp)
 {
     bo->width = width;
@@ -1635,8 +1635,7 @@ drmmode_hide_cursor(xf86CrtcPtr crtc)
                      ms->cursor_width, ms->cursor_height);
 }
 
-static Bool
-drmmode_show_cursor(xf86CrtcPtr crtc)
+static Bool drmmode_show_cursor(xf86CrtcPtr crtc)
 {
     drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
     drmmode_crtc->cursor_up = TRUE;
@@ -1792,7 +1791,8 @@ drmmode_shadow_allocate(xf86CrtcPtr crtc, int width, int height)
     int ret;
 
     if (!drmmode_create_bo(drmmode, &drmmode_crtc->rotate_bo,
-                           width, height, drmmode->kbpp)) {
+                           width, height, drmmode->kbpp))
+    {
         xf86DrvMsg(crtc->scrn->scrnIndex, X_ERROR,
                "Couldn't allocate shadow memory for rotated CRTC\n");
         return NULL;
@@ -1801,7 +1801,8 @@ drmmode_shadow_allocate(xf86CrtcPtr crtc, int width, int height)
     ret = drmmode_bo_import(drmmode, &drmmode_crtc->rotate_bo,
                             &drmmode_crtc->rotate_fb_id);
 
-    if (ret) {
+    if (ret)
+    {
         ErrorF("failed to add rotate fb\n");
         drmmode_bo_destroy(drmmode, &drmmode_crtc->rotate_bo);
         return NULL;
@@ -1882,8 +1883,8 @@ drmmode_shadow_create(xf86CrtcPtr crtc, void *data, int width, int height)
     return rotate_pixmap;
 }
 
-static void
-drmmode_shadow_destroy(xf86CrtcPtr crtc, PixmapPtr rotate_pixmap, void *data)
+
+static void drmmode_shadow_destroy(xf86CrtcPtr crtc, PixmapPtr rotate_pixmap, void *data)
 {
     drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
     drmmode_ptr drmmode = drmmode_crtc->drmmode;
@@ -1901,8 +1902,8 @@ drmmode_shadow_destroy(xf86CrtcPtr crtc, PixmapPtr rotate_pixmap, void *data)
     }
 }
 
-static void
-drmmode_crtc_destroy(xf86CrtcPtr crtc)
+
+static void drmmode_crtc_destroy(xf86CrtcPtr crtc)
 {
     drmmode_mode_ptr iterator, next;
     drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
@@ -1917,6 +1918,7 @@ drmmode_crtc_destroy(xf86CrtcPtr crtc)
     }
 }
 
+
 static const xf86CrtcFuncsRec drmmode_crtc_funcs = {
     .dpms = drmmode_crtc_dpms,
     .set_mode_major = drmmode_set_mode_major,
@@ -1925,7 +1927,6 @@ static const xf86CrtcFuncsRec drmmode_crtc_funcs = {
     .show_cursor_check = drmmode_show_cursor,
     .hide_cursor = drmmode_hide_cursor,
     .load_cursor_argb_check = drmmode_load_cursor_argb_check,
-
     .gamma_set = drmmode_crtc_gamma_set,
     .destroy = drmmode_crtc_destroy,
     .set_scanout_pixmap = drmmode_set_scanout_pixmap,
@@ -1934,8 +1935,8 @@ static const xf86CrtcFuncsRec drmmode_crtc_funcs = {
     .shadow_destroy = drmmode_shadow_destroy,
 };
 
-static uint32_t
-drmmode_crtc_vblank_pipe(int crtc_id)
+
+static uint32_t drmmode_crtc_vblank_pipe(int crtc_id)
 {
     if (crtc_id > 1)
         return crtc_id << DRM_VBLANK_HIGH_CRTC_SHIFT;
@@ -1945,8 +1946,8 @@ drmmode_crtc_vblank_pipe(int crtc_id)
         return 0;
 }
 
-static Bool
-is_plane_assigned(ScrnInfoPtr scrn, int plane_id)
+
+static Bool is_plane_assigned(ScrnInfoPtr scrn, int plane_id)
 {
     xf86CrtcConfigPtr xf86_config = XF86_CRTC_CONFIG_PTR(scrn);
     int c;
@@ -1980,8 +1981,11 @@ populate_format_modifiers(xf86CrtcPtr crtc, const drmModePlane *kplane,
         return FALSE;
 
     blob = drmModeGetPropertyBlob(drmmode->fd, blob_id);
-    if (!blob)
+    if (!blob) {
+        xf86Msg(X_INFO,
+                   "drm mode get Property blob failed\n");
         return FALSE;
+    }
 
     fmt_mod_blob = blob->data;
     blob_formats = formats_ptr(fmt_mod_blob);
@@ -2115,45 +2119,49 @@ drmmode_crtc_create_planes(xf86CrtcPtr crtc, int num)
         }
 
         /* Check if plane is already on this CRTC */
-        current_crtc = drmmode_prop_get_value(&tmp_props[DRMMODE_PLANE_CRTC_ID],
-                                              props, 0);
-        if (current_crtc == drmmode_crtc->mode_crtc->crtc_id) {
+        current_crtc = drmmode_prop_get_value(&tmp_props[DRMMODE_PLANE_CRTC_ID], props, 0);
+        if (current_crtc == drmmode_crtc->mode_crtc->crtc_id)
+        {
             if (best_plane) {
                 drmModeFreePlane(best_kplane);
                 drmmode_prop_info_free(drmmode_crtc->props_plane, DRMMODE_PLANE__COUNT);
             }
             best_plane = plane_id;
             best_kplane = kplane;
-            blob_id = drmmode_prop_get_value(&tmp_props[DRMMODE_PLANE_IN_FORMATS],
-                                             props, 0);
+            blob_id = drmmode_prop_get_value(&tmp_props[DRMMODE_PLANE_IN_FORMATS], props, 0);
             drmmode_prop_info_copy(drmmode_crtc->props_plane, tmp_props,
                                    DRMMODE_PLANE__COUNT, 1);
             drmModeFreeObjectProperties(props);
             break;
         }
 
-        if (!best_plane) {
+        if (!best_plane)
+        {
             best_plane = plane_id;
             best_kplane = kplane;
-            blob_id = drmmode_prop_get_value(&tmp_props[DRMMODE_PLANE_IN_FORMATS],
-                                             props, 0);
+            blob_id = drmmode_prop_get_value(&tmp_props[DRMMODE_PLANE_IN_FORMATS], props, 0);
             drmmode_prop_info_copy(drmmode_crtc->props_plane, tmp_props,
                                    DRMMODE_PLANE__COUNT, 1);
-        } else {
+        }
+        else
+        {
             drmModeFreePlane(kplane);
         }
-
         drmModeFreeObjectProperties(props);
     }
 
     drmmode_crtc->plane_id = best_plane;
-    if (best_kplane) {
+    if (best_kplane)
+    {
         drmmode_crtc->num_formats = best_kplane->count_formats;
-        drmmode_crtc->formats = calloc(sizeof(drmmode_format_rec),
-                                       best_kplane->count_formats);
-        if (!populate_format_modifiers(crtc, best_kplane, blob_id)) {
-            for (i = 0; i < best_kplane->count_formats; i++)
+        drmmode_crtc->formats = calloc(sizeof(drmmode_format_rec), best_kplane->count_formats);
+
+        if (!populate_format_modifiers(crtc, best_kplane, blob_id))
+        {
+            for (i = 0; i < best_kplane->count_formats; ++i)
+            {
                 drmmode_crtc->formats[i].format = best_kplane->formats[i];
+            }
         }
         drmModeFreePlane(best_kplane);
     }
@@ -2341,8 +2349,7 @@ koutput_get_prop_idx(int fd, drmModeConnectorPtr koutput,
     return idx;
 }
 
-static int
-koutput_get_prop_id(int fd, drmModeConnectorPtr koutput,
+static int koutput_get_prop_id(int fd, drmModeConnectorPtr koutput,
         int type, const char *name)
 {
     int idx = koutput_get_prop_idx(fd, koutput, type, name);
@@ -2357,13 +2364,17 @@ koutput_get_prop_blob(int fd, drmModeConnectorPtr koutput, const char *name)
     int idx = koutput_get_prop_idx(fd, koutput, DRM_MODE_PROP_BLOB, name);
 
     if (idx > -1)
+    {
         blob = drmModeGetPropertyBlob(fd, koutput->prop_values[idx]);
-
+        if(NULL == blob)
+        {
+            xf86Msg( X_INFO, "GetPropertyBlob return NULL\n");     
+        }
+    }
     return blob;
 }
 
-static void
-drmmode_output_attach_tile(xf86OutputPtr output)
+static void drmmode_output_attach_tile(xf86OutputPtr output)
 {
     drmmode_output_private_ptr drmmode_output = output->driver_private;
     drmModeConnectorPtr koutput = drmmode_output->mode_output;
@@ -2381,15 +2392,18 @@ drmmode_output_attach_tile(xf86OutputPtr output)
     drmmode_output->tile_blob =
         koutput_get_prop_blob(drmmode->fd, koutput, "TILE");
 
-    if (drmmode_output->tile_blob) {
-        if (xf86OutputParseKMSTile(drmmode_output->tile_blob->data, drmmode_output->tile_blob->length, &tile_info) == TRUE)
+    if (drmmode_output->tile_blob)
+    {
+        if ( xf86OutputParseKMSTile( drmmode_output->tile_blob->data, 
+                drmmode_output->tile_blob->length, &tile_info) == TRUE)
+        {
             set = &tile_info;
+        }
     }
     xf86OutputSetTile(output, set);
 }
 
-static Bool
-has_panel_fitter(xf86OutputPtr output)
+static Bool has_panel_fitter(xf86OutputPtr output)
 {
     drmmode_output_private_ptr drmmode_output = output->driver_private;
     drmModeConnectorPtr koutput = drmmode_output->mode_output;
@@ -2419,7 +2433,8 @@ drmmode_output_add_gtf_modes(xf86OutputPtr output, DisplayModePtr Modes)
     if (!has_panel_fitter(output))
         return Modes;
 
-    for (m = Modes; m; m = m->next) {
+    for (m = Modes; m; m = m->next)
+    {
         if (m->type & M_T_PREFERRED)
             preferred = m;
         max_x = max(max_x, m->HDisplay);
@@ -3560,8 +3575,39 @@ drmmode_load_palette(ScrnInfoPtr pScrn, int numColors,
     }
 }
 
-Bool
-drmmode_setup_colormap(ScreenPtr pScreen, ScrnInfoPtr pScrn)
+static void LS_LoadPalette(ScrnInfoPtr pScrn, int num, int *indices,
+	LOCO *colors, VisualPtr pVisual)
+{
+//	TRACE_ENTER();
+
+	xf86CrtcConfigPtr xf86_config = XF86_CRTC_CONFIG_PTR(pScrn);
+	uint16_t lut_r[256], lut_g[256], lut_b[256];
+	int i, p;
+
+	for (i = 0; i < num; ++i)
+	{
+		int index = indices[i];
+		lut_r[index] = colors[index].red << 8;
+		lut_g[index] = colors[index].green << 8;
+		lut_b[index] = colors[index].blue << 8;
+	}
+
+	for (p = 0; p < xf86_config->num_crtc; ++p)
+	{
+		xf86CrtcPtr crtc = xf86_config->crtc[p];
+
+		/* Make the change through RandR */
+		if (crtc->randr_crtc)
+			RRCrtcGammaSet(crtc->randr_crtc, lut_r, lut_g, lut_b);
+		else
+			crtc->funcs->gamma_set(crtc, lut_r, lut_g, lut_b, 256);
+
+	}
+//	TRACE_EXIT();
+}
+
+
+Bool drmmode_setup_colormap(ScreenPtr pScreen, ScrnInfoPtr pScrn)
 {
     xf86DrvMsgVerb(pScrn->scrnIndex, X_INFO, 0,
                    "Initializing kms color map for depth %d, %d bpc.\n",
@@ -3570,10 +3616,10 @@ drmmode_setup_colormap(ScreenPtr pScreen, ScrnInfoPtr pScrn)
         return FALSE;
 
     /* Adapt color map size and depth to color depth of screen. */
+    // drmmode_load_palette, LS_LoadPalette
+    // CMAP_PALETTED_TRUECOLOR | 
     if (!xf86HandleColormaps(pScreen, 1 << pScrn->rgbBits, 10,
-                             drmmode_load_palette, NULL,
-                             CMAP_PALETTED_TRUECOLOR |
-                             CMAP_RELOAD_ON_MODE_SWITCH))
+                drmmode_load_palette, NULL, CMAP_RELOAD_ON_MODE_SWITCH))
         return FALSE;
     return TRUE;
 }
