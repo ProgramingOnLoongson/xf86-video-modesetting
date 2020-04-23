@@ -41,7 +41,7 @@
 #include "mipointer.h"
 #include "mipointrst.h"
 #include "micmap.h"
-#include <X11/extensions/randr.h>
+
 #include "fb.h"
 #include "edid.h"
 #include "xf86i2c.h"
@@ -49,8 +49,11 @@
 #include "miscstruct.h"
 #include "dixstruct.h"
 #include "xf86xv.h"
+#include "xf86Module.h"
+
+#include <X11/extensions/randr.h>
 #include <X11/extensions/Xv.h>
-#include <dlfcn.h>
+
 #ifdef XSERVER_PLATFORM_BUS
 #include "xf86platformBus.h"
 #endif
@@ -742,23 +745,23 @@ static Bool load_glamor(ScrnInfoPtr pScrn)
     if (!mod)
         return FALSE;
 
-    ms->glamor.back_pixmap_from_fd = dlsym(mod, "glamor_back_pixmap_from_fd");
-    ms->glamor.block_handler = dlsym(mod, "glamor_block_handler");
-    ms->glamor.clear_pixmap = dlsym(mod, "glamor_clear_pixmap");
-    ms->glamor.egl_create_textured_pixmap = dlsym(mod, "glamor_egl_create_textured_pixmap");
-    ms->glamor.egl_create_textured_pixmap_from_gbm_bo = dlsym(mod, "glamor_egl_create_textured_pixmap_from_gbm_bo");
-    ms->glamor.egl_exchange_buffers = dlsym(mod, "glamor_egl_exchange_buffers");
-    ms->glamor.egl_get_gbm_device = dlsym(mod, "glamor_egl_get_gbm_device");
-    ms->glamor.egl_init = dlsym(mod, "glamor_egl_init");
-    ms->glamor.finish = dlsym(mod, "glamor_finish");
-    ms->glamor.gbm_bo_from_pixmap = dlsym(mod, "glamor_gbm_bo_from_pixmap");
-    ms->glamor.init = dlsym(mod, "glamor_init");
-    ms->glamor.name_from_pixmap = dlsym(mod, "glamor_name_from_pixmap");
-    ms->glamor.set_drawable_modifiers_func = dlsym(mod, "glamor_set_drawable_modifiers_func");
-    ms->glamor.shareable_fd_from_pixmap = dlsym(mod, "glamor_shareable_fd_from_pixmap");
-    ms->glamor.supports_pixmap_import_export = dlsym(mod, "glamor_supports_pixmap_import_export");
-    ms->glamor.xv_init = dlsym(mod, "glamor_xv_init");
-    ms->glamor.egl_get_driver_name = dlsym(mod, "glamor_egl_get_driver_name");
+    ms->glamor.back_pixmap_from_fd = LoaderSymbol(mod, "glamor_back_pixmap_from_fd");
+    ms->glamor.block_handler = LoaderSymbol(mod, "glamor_block_handler");
+    ms->glamor.clear_pixmap = LoaderSymbol(mod, "glamor_clear_pixmap");
+    ms->glamor.egl_create_textured_pixmap = LoaderSymbol(mod, "glamor_egl_create_textured_pixmap");
+    ms->glamor.egl_create_textured_pixmap_from_gbm_bo = LoaderSymbol(mod, "glamor_egl_create_textured_pixmap_from_gbm_bo");
+    ms->glamor.egl_exchange_buffers = LoaderSymbol(mod, "glamor_egl_exchange_buffers");
+    ms->glamor.egl_get_gbm_device = LoaderSymbol(mod, "glamor_egl_get_gbm_device");
+    ms->glamor.egl_init = LoaderSymbol(mod, "glamor_egl_init");
+    ms->glamor.finish = LoaderSymbol(mod, "glamor_finish");
+    ms->glamor.gbm_bo_from_pixmap = LoaderSymbol(mod, "glamor_gbm_bo_from_pixmap");
+    ms->glamor.init = LoaderSymbol(mod, "glamor_init");
+    ms->glamor.name_from_pixmap = LoaderSymbol(mod, "glamor_name_from_pixmap");
+    ms->glamor.set_drawable_modifiers_func = LoaderSymbol(mod, "glamor_set_drawable_modifiers_func");
+    ms->glamor.shareable_fd_from_pixmap = LoaderSymbol(mod, "glamor_shareable_fd_from_pixmap");
+    ms->glamor.supports_pixmap_import_export = LoaderSymbol(mod, "glamor_supports_pixmap_import_export");
+    ms->glamor.xv_init = LoaderSymbol(mod, "glamor_xv_init");
+    ms->glamor.egl_get_driver_name = LoaderSymbol(mod, "glamor_egl_get_driver_name");
 
     return TRUE;
 }
@@ -1118,18 +1121,20 @@ static Bool PreInit(ScrnInfoPtr pScrn, int flags)
 
     if (ms->drmmode.shadow_enable)
     {
-        void *mod = xf86LoadSubModule(pScrn, "shadow");
+        void* mod = xf86LoadSubModule(pScrn, "shadow");
         if (NULL == mod)
         {
             xf86DrvMsg(pScrn->scrnIndex, X_INFO, "shadow loaded failed.\n");
             return FALSE;
         }
 
-        ms->shadow.Setup        = dlsym(mod, "shadowSetup");
-        ms->shadow.Add          = dlsym(mod, "shadowAdd");
-        ms->shadow.Remove       = dlsym(mod, "shadowRemove");
-        ms->shadow.Update32to24 = dlsym(mod, "shadowUpdate32to24");
-        ms->shadow.UpdatePacked = dlsym(mod, "shadowUpdatePacked");
+        // suijingfeng: LoaderSymbolFromModule is not get exported
+        // This is embarassing.
+        ms->shadow.Setup        = LoaderSymbol("shadowSetup");
+        ms->shadow.Add          = LoaderSymbol("shadowAdd");
+        ms->shadow.Remove       = LoaderSymbol("shadowRemove");
+        ms->shadow.Update32to24 = LoaderSymbol("shadowUpdate32to24");
+        ms->shadow.UpdatePacked = LoaderSymbol("shadowUpdatePacked");
 
         xf86DrvMsg(pScrn->scrnIndex, X_INFO, "shadow's symbols loaded.\n");
     }
